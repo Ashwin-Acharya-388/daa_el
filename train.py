@@ -39,6 +39,10 @@ def main():
                         help="Path to dataset CSV (default: Financial Distress.csv)")
     parser.add_argument("--skip-shap", action="store_true",
                         help="Skip SHAP analysis (faster training)")
+    parser.add_argument("--consolidated", action="store_true",
+                        help="Use consolidated dataset (Financial Distress + Taiwanese)")
+    parser.add_argument("--use-selected-features", action="store_true",
+                        help="Use greedy-selected features from greedy_feature_selection.py")
     args = parser.parse_args()
 
     start_time = time.time()
@@ -58,14 +62,58 @@ def main():
     print("STEP 1: DATA PREPROCESSING")
     print(f"{'━'*60}")
 
-    from data_preprocessing import run_preprocessing
-    data = run_preprocessing(args.data)
+    if args.consolidated or config.USE_CONSOLIDATED:
+        # Use consolidated dataset (merged Financial Distress + Taiwanese)
+        print("[INFO] Using CONSOLIDATED dataset (Financial Distress + Taiwanese)")
+        from data_consolidation import consolidate_datasets
+        from sklearn.model_selection import train_test_split
+        from sklearn.preprocessing import StandardScaler
+        import json
 
-    X_train = data["X_train"]
-    X_test = data["X_test"]
-    y_train = data["y_train"]
-    y_test = data["y_test"]
-    feature_names = data["feature_names"]
+        consolidated = consolidate_datasets()
+        X_all = consolidated["X"]
+        y_all = consolidated["y"]
+        feature_names = consolidated["feature_names"]
+
+        # Apply greedy-selected features if requested
+        if args.use_selected_features and os.path.exists(config.SELECTED_FEATURES_PATH):
+            with open(config.SELECTED_FEATURES_PATH, "r") as f:
+                sel = json.load(f)
+            selected_features = sel["selected_features"]
+            print(f"[INFO] Using {len(selected_features)} greedy-selected features")
+            X_all = X_all[selected_features]
+            feature_names = selected_features
+
+        # Stratified split
+        X_train_raw, X_test_raw, y_train, y_test = train_test_split(
+            X_all, y_all.values,
+            test_size=config.TEST_SIZE,
+            random_state=config.RANDOM_SEED,
+            stratify=y_all.values
+        )
+
+        # Scale
+        scaler = StandardScaler()
+        X_train = scaler.fit_transform(X_train_raw)
+        X_test = scaler.transform(X_test_raw)
+
+        # Save scaler
+        import joblib
+        scaler_path = os.path.join(config.MODEL_DIR, "scaler.joblib")
+        joblib.dump(scaler, scaler_path)
+
+        print(f"  Train: {X_train.shape[0]} samples × {X_train.shape[1]} features")
+        print(f"  Test:  {X_test.shape[0]} samples × {X_test.shape[1]} features")
+
+    else:
+        from data_preprocessing import run_preprocessing
+        data = run_preprocessing(args.data)
+
+        X_train = data["X_train"]
+        X_test = data["X_test"]
+        y_train = data["y_train"]
+        y_test = data["y_test"]
+        feature_names = data["feature_names"]
 
     # ════════════════════════════════════════════════════════════════════
     #  STEP 2: Data Balancing (SMOTE-ENN)

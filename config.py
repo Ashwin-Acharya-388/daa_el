@@ -10,6 +10,8 @@ import os
 # ─────────────────────────────── Paths ───────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(BASE_DIR, "Financial Distress.csv")
+TAIWANESE_DATA_PATH = os.path.join(BASE_DIR, "taiwanese_bankruptcy.csv")
+CONSOLIDATED_DATA_PATH = os.path.join(BASE_DIR, "consolidated_dataset.csv")
 OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
 MODEL_DIR = os.path.join(OUTPUT_DIR, "model")
 PLOTS_DIR = os.path.join(OUTPUT_DIR, "plots")
@@ -54,3 +56,10 @@ ENN_N_NEIGHBORS = 3               # k-neighbors for ENN cleaning
 SHAP_BACKGROUND_SAMPLES = 100     # Samples used as SHAP background (k-means)
 SHAP_NUM_EXPLANATIONS = 5         # Number of individual predictions to explain
 SHAP_TOP_FEATURES = 10            # Top N features to show in explanations
+
+# ─────────────────────── Greedy Feature Selection ────────────────────
+GREEDY_MAX_FEATURES = 30          # Maximum features to select
+GREEDY_MIN_IMPROVEMENT = 0.001    # Minimum AUC improvement (ε) to continue
+GREEDY_CV_FOLDS = 5               # Cross-validation folds for evaluation
+SELECTED_FEATURES_PATH = os.path.join(REPORTS_DIR, "selected_features.json")
+USE_CONSOLIDATED = True           # Whether to use consolidated dataset
