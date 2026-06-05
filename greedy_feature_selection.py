@@ -389,23 +389,12 @@ def save_results(result: dict, save_dir: str = None):
     print(f"[Greedy] Feature list saved to: {features_path}")
 
 
-def run_greedy_pipeline(max_features: int = 30,
-                        min_features: int = 25,
-                        min_improvement: float = 0.001,
-                        cv_folds: int = 5) -> dict:
+def run_greedy_pipeline(max_features: int = None,
+                        min_features: int = None,
+                        min_improvement: float = None,
+                        cv_folds: int = None) -> dict:
     """
     Full pipeline: consolidate datasets → greedy feature selection.
-
-    Parameters
-    ----------
-    max_features : int — maximum features to select
-    min_features : int — minimum features to force-select
-    min_improvement : float — minimum AUC improvement threshold (ε)
-    cv_folds : int — cross-validation folds
-
-    Returns
-    -------
-    dict — greedy selection results
     """
     from data_consolidation import consolidate_datasets
 
@@ -415,7 +404,13 @@ def run_greedy_pipeline(max_features: int = 30,
     y = data["y"].values
     feature_names = data["feature_names"]
 
-    # Step 2: Run greedy forward selection
+    # Step 2: Use config defaults if not provided
+    max_features = max_features or config.GREEDY_MAX_FEATURES
+    min_features = min_features or config.GREEDY_MIN_FEATURES
+    min_improvement = min_improvement or config.GREEDY_MIN_IMPROVEMENT
+    cv_folds = cv_folds or config.GREEDY_CV_FOLDS
+
+    # Step 3: Run greedy forward selection
     result = greedy_forward_selection(
         X, y, feature_names,
         max_features=max_features,
@@ -439,14 +434,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="DAA Greedy Forward Feature Selection for Financial Risk"
     )
-    parser.add_argument("--max-features", type=int, default=30,
-                        help="Maximum features to select (default: 30)")
-    parser.add_argument("--min-features", type=int, default=25,
-                        help="Minimum features to force-select (default: 25)")
-    parser.add_argument("--min-improvement", type=float, default=0.001,
-                        help="Minimum AUC improvement threshold ε (default: 0.001)")
-    parser.add_argument("--cv-folds", type=int, default=5,
-                        help="Cross-validation folds (default: 5)")
+    parser.add_argument("--max-features", type=int, default=None,
+                        help="Maximum features to select")
+    parser.add_argument("--min-features", type=int, default=None,
+                        help="Minimum features to select (forced phase)")
+    parser.add_argument("--min-improvement", type=float, default=None,
+                        help="Minimum AUC improvement threshold ε")
+    parser.add_argument("--cv-folds", type=int, default=None,
+                        help="Cross-validation folds")
     args = parser.parse_args()
 
     print("=" * 60)
