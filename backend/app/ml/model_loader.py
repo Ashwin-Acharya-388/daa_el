@@ -15,7 +15,7 @@ from typing import Optional
 import joblib
 import numpy as np
 
-from app.config import settings, PROJECT_ROOT
+from app.config import settings, PROJECT_ROOT, REPORTS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +100,51 @@ class _ModelStore:
             "  ✓ Metadata loaded — %d features", len(self.feature_names)
         )
 
-        # 5. Load saved evaluation metrics
+        # 5. CRITICAL: Validate feature count matches model input dimension
+        model_input_dim = self.model.input_shape[1]
+        metadata_dim = len(self.feature_names)
+
+        if model_input_dim != metadata_dim:
+            logger.warning(
+                "  ⚠ DIMENSION MISMATCH: model expects %d features but "
+                "metadata declares %d. Attempting fallback to selected_features.json …",
+                model_input_dim, metadata_dim,
+            )
+            # Fallback: load selected_features.json
+            fallback_path = str(REPORTS_DIR / "selected_features.json")
+            try:
+                with open(fallback_path, "r") as f:
+                    sel = json.load(f)
+                fallback_features = sel["selected_features"]
+                if len(fallback_features) == model_input_dim:
+                    self.feature_names = fallback_features
+                    # Rebuild medians for these features (use 0.0 as default)
+                    self.training_medians = {
+                        fn: self.training_medians.get(fn, 0.0)
+                        for fn in fallback_features
+                    }
+                    logger.info(
+                        "  ✓ Fallback successful — using %d features from selected_features.json",
+                        len(fallback_features),
+                    )
+                else:
+                    raise ValueError(
+                        f"Fallback also mismatched: selected_features.json has "
+                        f"{len(fallback_features)} but model expects {model_input_dim}"
+                    )
+            except Exception as e:
+                raise RuntimeError(
+                    f"FATAL: Cannot resolve feature dimension mismatch. "
+                    f"Model expects {model_input_dim} features but metadata "
+                    f"declares {metadata_dim}. Fallback failed: {e}"
+                ) from e
+        else:
+            logger.info(
+                "  ✓ Dimension check passed — model and metadata both use %d features",
+                model_input_dim,
+            )
+
+        # 6. Load saved evaluation metrics
         try:
             with open(settings.METRICS_PATH, "r") as f:
                 self.metrics = json.load(f)

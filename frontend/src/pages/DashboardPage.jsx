@@ -1,6 +1,6 @@
 /**
  * DashboardPage — Main dashboard with metrics cards, prediction counter,
- * and model status indicator.
+ * SFFS feature selection info, and model status indicator.
  */
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -12,6 +12,7 @@ import {
   Shield,
   Zap,
   BarChart2,
+  Filter,
 } from 'lucide-react';
 import AnimatedCounter from '../components/common/AnimatedCounter';
 import { MetricsSkeleton } from '../components/common/LoadingSkeleton';
@@ -38,7 +39,7 @@ export default function DashboardPage() {
   useEffect(() => {
     getModelInfo()
       .then((res) => setInfo(res.data))
-      .catch((err) => setError(err.response?.data?.detail || 'Failed to load model info'))
+      .catch((err) => setError(err.response?.data?.detail || 'Failed to load model info. Is the backend running?'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -54,6 +55,27 @@ export default function DashboardPage() {
     );
   }
 
+  if (error && !info) {
+    return (
+      <div>
+        <div className="page-header">
+          <h1 style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Shield size={32} style={{ color: 'var(--gold)' }} />
+            Dashboard
+          </h1>
+        </div>
+        <div className="glass-card glass-card--red" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
+          <Activity size={48} style={{ color: 'var(--red)', marginBottom: 'var(--space-4)' }} />
+          <h3 style={{ color: 'var(--red)', marginBottom: 'var(--space-2)' }}>Backend Unavailable</h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)' }}>{error}</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', marginTop: 'var(--space-4)' }}>
+            Start the FastAPI backend with: <code>python -m uvicorn app.main:app --port 8000</code>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const metrics = info?.metrics || {};
   const accuracy = metrics.accuracy || 0;
   const recall = metrics.recall_sensitivity || 0;
@@ -62,6 +84,7 @@ export default function DashboardPage() {
   const precision = metrics.precision || 0;
   const f1 = metrics.f1_score || 0;
   const cm = metrics.confusion_matrix || {};
+  const fs = info?.feature_selection || {};
 
   const metricCards = [
     {
@@ -122,6 +145,8 @@ export default function DashboardPage() {
           justifyContent: 'space-between',
           marginBottom: 'var(--space-6)',
           padding: 'var(--space-4) var(--space-6)',
+          flexWrap: 'wrap',
+          gap: 'var(--space-3)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -130,8 +155,9 @@ export default function DashboardPage() {
             Model: {info?.model_status === 'healthy' ? 'Healthy & Running' : 'Offline'}
           </span>
         </div>
-        <div style={{ display: 'flex', gap: '2rem', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+        <div style={{ display: 'flex', gap: '2rem', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
           <span>Features: <strong style={{ color: 'var(--text-primary)' }}>{info?.feature_count}</strong></span>
+          <span>Selection: <strong style={{ color: 'var(--blue)' }}>{fs.algorithm || 'N/A'}</strong></span>
           <span>Version: <strong style={{ color: 'var(--text-primary)' }}>{info?.version}</strong></span>
         </div>
       </motion.div>
@@ -198,6 +224,37 @@ export default function DashboardPage() {
           </div>
         </motion.div>
       </div>
+
+      {/* SFFS Feature Selection Info */}
+      {fs.algorithm && (
+        <motion.div className="glass-card glass-card--blue" variants={itemVariants} style={{ marginBottom: 'var(--space-6)' }}>
+          <h3 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, marginBottom: 'var(--space-4)', color: 'var(--text-secondary)' }}>
+            <Filter size={16} style={{ marginRight: 8, verticalAlign: 'middle' }} />
+            Feature Selection — {fs.algorithm}
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-4)' }}>
+            <div style={{ padding: 'var(--space-3)', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-md)' }}>
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginBottom: 2 }}>Features Selected</div>
+              <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--blue)' }}>{fs.n_features_selected || info?.feature_count}</div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>from 178 total candidates</div>
+            </div>
+            <div style={{ padding: 'var(--space-3)', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-md)' }}>
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginBottom: 2 }}>Selection AUC</div>
+              <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--green)' }}>
+                {fs.final_auc ? (fs.final_auc * 100).toFixed(2) + '%' : '—'}
+              </div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Cross-validated AUC-ROC</div>
+            </div>
+            <div style={{ padding: 'var(--space-3)', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-md)' }}>
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginBottom: 2 }}>Evaluations</div>
+              <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--gold)' }}>
+                {fs.total_evaluations?.toLocaleString() || '—'}
+              </div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Feature subsets tested</div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Confusion Matrix Summary */}
       <motion.div className="glass-card" variants={itemVariants}>

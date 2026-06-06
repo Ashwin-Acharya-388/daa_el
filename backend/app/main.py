@@ -15,8 +15,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import init_db, close_db
-from app.dependencies import close_redis
 from app.ml.model_loader import load_model
 
 # ── Logging ──
@@ -37,19 +35,13 @@ async def lifespan(app: FastAPI):
     logger.info("  Financial Risk Analysis API — Starting")
     logger.info("=" * 60)
 
-    # 1. Create DB tables
-    await init_db()
-    logger.info("Database tables ready")
-
-    # 2. Pre-load ML model
+    # Pre-load ML model
     load_model()
     logger.info("Model loaded into memory")
 
     yield
 
     # SHUTDOWN
-    await close_redis()
-    await close_db()
     logger.info("Shutdown complete")
 
 
@@ -60,7 +52,7 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description=(
         "Production API for DenseNet-based financial risk prediction "
-        "with SHAP explainability, PostgreSQL persistence, and Redis caching."
+        "with SHAP explainability and in-memory state management."
     ),
     lifespan=lifespan,
 )

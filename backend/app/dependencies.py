@@ -1,11 +1,13 @@
 """
-dependencies.py — FastAPI dependencies for auth, rate limiting, and Redis.
+dependencies.py — FastAPI dependencies for auth and rate limiting.
+
+All state is in-memory — no external services required.
 """
 
 import time
+from collections import defaultdict
 from typing import Optional
 
-import redis.asyncio as aioredis
 from fastapi import Depends, HTTPException, Request, Security
 from fastapi.security import APIKeyHeader
 
@@ -30,55 +32,30 @@ async def verify_api_key(
     return api_key
 
 
-# ── Redis connection pool ───────────────────────────────────────────
+# ── In-memory rate limiter (sliding window) ─────────────────────────
 
-_redis_pool: Optional[aioredis.Redis] = None
+_rate_limit_store: dict[str, list[float]] = defaultdict(list)
 
-
-async def get_redis() -> aioredis.Redis:
-    """Return a shared async Redis client."""
-    global _redis_pool
-    if _redis_pool is None:
-        _redis_pool = aioredis.from_url(
-            settings.REDIS_URL,
-            decode_responses=True,
-            max_connections=20,
-        )
-    return _redis_pool
-
-
-async def close_redis():
-    """Shutdown Redis pool — call on app shutdown."""
-    global _redis_pool
-    if _redis_pool is not None:
-        await _redis_pool.close()
-        _redis_pool = None
-
-
-# ── Rate limiter (sliding window via Redis) ─────────────────────────
 
 async def rate_limiter(
     request: Request,
     api_key: str = Depends(verify_api_key),
-    redis_client: aioredis.Redis = Depends(get_redis),
 ):
     """
-    Enforce per-key rate limiting using a Redis sorted-set sliding window.
+    Enforce per-key rate limiting using an in-memory sliding window.
     Raises 429 when limit is exceeded.
     """
-    key = f"rate_limit:{api_key}"
     now = time.time()
     window = 60  # seconds
 
-    pipe = redis_client.pipeline()
-    pipe.zremrangebyscore(key, 0, now - window)  # prune old entries
-    pipe.zadd(key, {str(now): now})               # add current
-    pipe.zcard(key)                                # count in window
-    pipe.expire(key, window + 1)                   # auto-expire
-    results = await pipe.execute()
+    # Prune old entries
+    timestamps = _rate_limit_store[api_key]
+    _rate_limit_store[api_key] = [t for t in timestamps if t > now - window]
 
-    count = results[2]
-    if count > settings.RATE_LIMIT_PER_MINUTE:
+    # Add current request
+    _rate_limit_store[api_key].append(now)
+
+    if len(_rate_limit_store[api_key]) > settings.RATE_LIMIT_PER_MINUTE:
         raise HTTPException(
             status_code=429,
             detail=(

@@ -29,15 +29,6 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
 
-    # ── Database ──
-    DATABASE_URL: str = (
-        "postgresql+asyncpg://risk_user:risk_password_2024@localhost:5432/financial_risk"
-    )
-
-    # ── Redis ──
-    REDIS_URL: str = "redis://localhost:6379/0"
-    CACHE_TTL_SECONDS: int = 86400  # 24 hours
-
     # ── Security ──
     API_KEY: str = "fra-dev-key-2024"
     RATE_LIMIT_PER_MINUTE: int = 100

@@ -1,8 +1,8 @@
 /**
- * BatchPage — CSV upload with drag-and-drop, progress tracking via WebSocket,
- * and results preview table.
+ * BatchPage — CSV upload with drag-and-drop, progress tracking via WebSocket
+ * with polling fallback, file size validation, and results preview table.
  */
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileSpreadsheet,
@@ -17,6 +17,9 @@ import { uploadBatch, getBatchStatus, downloadBatchResult } from '../api/client'
 import { useWebSocket } from '../hooks/useWebSocket';
 import { downloadBlob } from '../utils/formatters';
 
+const MAX_FILE_SIZE_MB = 50;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
@@ -30,9 +33,10 @@ export default function BatchPage() {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
+  const pollIntervalRef = useRef(null);
 
   // WebSocket for real-time progress
-  const { lastMessage } = useWebSocket(taskId);
+  const { lastMessage, isConnected } = useWebSocket(taskId);
 
   // Update status from WebSocket messages
   const progress = lastMessage || status;
@@ -42,23 +46,80 @@ export default function BatchPage() {
       : 0
     : 0;
 
+  // Polling fallback when WebSocket is not connected
+  useEffect(() => {
+    if (!taskId || isConnected) {
+      // Clear polling if WebSocket is working or no task
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // WebSocket not connected — poll via HTTP
+    const isTerminal = progress?.status === 'COMPLETED' || progress?.status === 'FAILED';
+    if (isTerminal) return;
+
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const res = await getBatchStatus(taskId);
+        const data = res.data;
+        setStatus({
+          status: data.status,
+          processed: data.processed_rows,
+          total: data.total_rows,
+          error: data.error_message,
+        });
+        if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      } catch {
+        // Ignore polling errors silently
+      }
+    }, 1000);
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [taskId, isConnected, progress?.status]);
+
+  const validateFile = (f) => {
+    if (!f) return 'No file selected';
+    if (!f.name.endsWith('.csv')) return 'Please upload a .csv file';
+    if (f.size > MAX_FILE_SIZE_BYTES) {
+      return `File too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Maximum: ${MAX_FILE_SIZE_MB} MB`;
+    }
+    return null;
+  };
+
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     setDragOver(false);
     const dropped = e.dataTransfer.files[0];
-    if (dropped && dropped.name.endsWith('.csv')) {
+    const err = validateFile(dropped);
+    if (err) {
+      setError(err);
+    } else {
       setFile(dropped);
       setError(null);
-    } else {
-      setError('Please upload a .csv file');
     }
   }, []);
 
   const handleFileSelect = (e) => {
     const selected = e.target.files[0];
     if (selected) {
-      setFile(selected);
-      setError(null);
+      const err = validateFile(selected);
+      if (err) {
+        setError(err);
+      } else {
+        setFile(selected);
+        setError(null);
+      }
     }
   };
 
@@ -96,6 +157,10 @@ export default function BatchPage() {
     setTaskId(null);
     setStatus(null);
     setError(null);
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
   };
 
   const isComplete = progress?.status === 'COMPLETED';
@@ -134,7 +199,7 @@ export default function BatchPage() {
               <strong>Drag & drop</strong> your CSV file here, or <strong>click to browse</strong>
             </p>
             <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', marginTop: 8 }}>
-              Supported format: .csv — Must contain feature columns matching the model
+              Supported format: .csv — Max {MAX_FILE_SIZE_MB} MB — Must contain feature columns matching the model
             </p>
           </div>
 
@@ -194,6 +259,7 @@ export default function BatchPage() {
                 </h3>
                 <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
                   {file?.name} • {progress?.total || 0} rows
+                  {!isConnected && isProcessing && ' • Using HTTP polling (WebSocket unavailable)'}
                 </p>
               </div>
             </div>
@@ -252,10 +318,11 @@ export default function BatchPage() {
           📋 CSV Format Guide
         </h3>
         <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-          <p>Your CSV file should contain columns matching the model's expected features (x1, x2, … x83).</p>
+          <p>Your CSV file should contain columns matching the model's SFFS-selected features (e.g., fd_x13, tw_f19, tw_f37, …).</p>
           <ul style={{ paddingLeft: '1.5rem', marginTop: 8 }}>
             <li>Missing features will be filled with training median values</li>
             <li>Extra columns are preserved in the output</li>
+            <li>Maximum file size: {MAX_FILE_SIZE_MB} MB</li>
             <li>Output adds: <code style={{ color: 'var(--blue)', background: 'rgba(51,102,255,0.1)', padding: '1px 6px', borderRadius: 4 }}>default_probability</code>, <code style={{ color: 'var(--blue)', background: 'rgba(51,102,255,0.1)', padding: '1px 6px', borderRadius: 4 }}>predicted_class</code>, <code style={{ color: 'var(--blue)', background: 'rgba(51,102,255,0.1)', padding: '1px 6px', borderRadius: 4 }}>decision</code></li>
           </ul>
         </div>

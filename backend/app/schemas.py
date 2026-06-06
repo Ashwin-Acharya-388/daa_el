@@ -6,9 +6,20 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from enum import Enum as PyEnum
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
+
+
+# ── Enums (moved from models.py) ────────────────────────────────────
+
+class BatchStatus(str, PyEnum):
+    """Status of a batch prediction job."""
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
 
 
 # ────────────────── Prediction ──────────────────────────────────────
@@ -79,6 +90,8 @@ class ModelInfoResponse(BaseModel):
     total_predictions: int
     model_status: str
     architecture: dict[str, Any]
+    feature_selection: dict[str, Any] = {}
+    training_medians: dict[str, float] = {}
 
 
 # ────────────────── Explain ─────────────────────────────────────────

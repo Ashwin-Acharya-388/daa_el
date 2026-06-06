@@ -10,6 +10,44 @@ import WaterfallChart from '../components/SHAP/WaterfallChart';
 import FeatureImportance from '../components/SHAP/FeatureImportance';
 import { getModelInfo, predictSingle } from '../api/client';
 
+/**
+ * Human-readable labels and descriptions for the 25 SFFS-selected features.
+ * Keys match the raw feature codes returned by the backend model info endpoint.
+ */
+const FEATURE_DETAILS = {
+  // ── Taiwanese Bankruptcy Dataset Features ──
+  tw_f1:  { label: 'ROA (C) — Pre-Interest & Depreciation',    description: 'Operational profitability before interest, tax, and depreciation' },
+  tw_f2:  { label: 'ROA (A) — Pre-Interest & Post-Tax',         description: 'Profitability relative to assets, post-tax but pre-interest' },
+  tw_f3:  { label: 'ROA (B) — Pre-Interest & Depr. Post-Tax',   description: 'Return on assets post-tax, pre-interest and depreciation' },
+  tw_f18: { label: 'Net Value Per Share',                       description: 'Book value of equity divided by outstanding shares' },
+  tw_f19: { label: 'Persistent EPS (Last 4 Seasons)',           description: 'Trailing Earnings Per Share; consistent earning capacity' },
+  tw_f37: { label: 'Debt Ratio %',                              description: 'Total liabilities relative to total assets (leverage scale)' },
+  tw_f43: { label: 'Net Profit Before Tax / Paid-in Capital',   description: 'Pre-tax efficiency of shareholder-contributed capital' },
+  tw_f50: { label: 'Net Worth Turnover Rate',                   description: 'How effectively net worth/equity generates sales revenue' },
+  tw_f54: { label: 'Working Capital / Total Assets',            description: 'Liquidity ratio — capability to cover short-term debt' },
+  tw_f57: { label: 'Cash / Total Assets',                       description: 'Proportion of assets held in cash or cash equivalents' },
+  tw_f74: { label: 'Cash Turnover Rate',                        description: 'Speed with which cash cycles through operations' },
+  tw_f81: { label: 'Cash Flow to Liability',                    description: 'Operating cash flow relative to total liabilities (solvency)' },
+  tw_f86: { label: 'Net Income / Total Assets (ROA)',           description: 'Standard overall Return on Assets profitability metric' },
+  tw_f91: { label: 'Liability to Equity',                       description: 'Debt-to-Equity ratio — total liabilities vs. shareholder equity' },
+
+  // ── Financial Distress Dataset Features ──
+  fd_x3:  { label: 'Non-Current Assets Ratio',                  description: 'Asset composition indicator' },
+  fd_x5:  { label: 'Quick Assets Ratio',                        description: 'Acid-test short-term liquidity ratio' },
+  fd_x10: { label: 'Operating Margin Scale',                    description: 'Operating efficiency indicator' },
+  fd_x11: { label: 'Working Capital Scale',                     description: 'Working capital relative to sales volume' },
+  fd_x13: { label: 'Financial Distress Index',                  description: 'Distress indicator based on recent financial performance' },
+  fd_x15: { label: 'Current Liabilities Ratio',                 description: 'Short-term debt concentration indicator' },
+  fd_x40: { label: 'Retained Earnings / Total Assets',          description: 'Cumulative profitability and capital strength indicator' },
+  fd_x57: { label: 'Interest Expense / Total Assets',           description: 'Borrowing cost ratio' },
+  fd_x65: { label: 'Sales Growth / Total Assets',               description: 'Revenue expansion speed indicator' },
+  fd_x66: { label: 'Asset Turnover Scale',                      description: 'Asset utilisation efficiency metric' },
+  fd_x80: { label: 'Industry Sector Code',                      description: 'Categorical code representing the borrower\'s industry sector', isCategorical: true },
+};
+
+/** Look up display info for a feature; fall back to raw name. */
+const getFeatureInfo = (name) => FEATURE_DETAILS[name] || { label: name, description: '' };
+
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
@@ -30,20 +68,26 @@ export default function PredictPage() {
   const [expandedGroups, setExpandedGroups] = useState({ 0: true });
   const [includeShap, setIncludeShap] = useState(true);
 
-  // Load feature names from model info
+  // Load feature names and medians from model info
   useEffect(() => {
-    getModelInfo().then((res) => {
-      const names = res.data.feature_names || [];
-      setFeatureNames(names);
-      // Initialize features with zeros
-      const init = {};
-      names.forEach((n) => (init[n] = 0));
-      setFeatures(init);
-    });
+    getModelInfo()
+      .then((res) => {
+        const names = res.data.feature_names || [];
+        const meds = res.data.training_medians || {};
+        setFeatureNames(names);
+        setMedians(meds);
+        // Initialize features with zeros
+        const init = {};
+        names.forEach((n) => (init[n] = 0));
+        setFeatures(init);
+      })
+      .catch((err) => {
+        setError('Failed to load model info. Is the backend running?');
+      });
   }, []);
 
   const handleSliderChange = (name, value) => {
-    setFeatures((prev) => ({ ...prev, [name]: parseFloat(value) }));
+    setFeatures((prev) => ({ ...prev, [name]: parseFloat(value) || 0 }));
   };
 
   const handleReset = () => {
@@ -54,10 +98,21 @@ export default function PredictPage() {
     setError(null);
   };
 
+  const handleLoadMedians = () => {
+    const filled = {};
+    featureNames.forEach((n) => {
+      filled[n] = medians[n] !== undefined ? medians[n] : 0;
+    });
+    setFeatures(filled);
+  };
+
   const handleRandomFill = () => {
     const rand = {};
     featureNames.forEach((n) => {
-      rand[n] = parseFloat((Math.random() * 4 - 1).toFixed(4));
+      // Use median as center, add random variation
+      const median = medians[n] || 0;
+      const spread = Math.max(Math.abs(median) * 2, 1);
+      rand[n] = parseFloat((median + (Math.random() - 0.5) * spread).toFixed(4));
     });
     setFeatures(rand);
   };
@@ -74,6 +129,22 @@ export default function PredictPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Compute dynamic slider range for each feature based on its median
+  const getSliderRange = (name) => {
+    const median = medians[name] || 0;
+    const absMedian = Math.abs(median);
+    if (absMedian > 100) {
+      return { min: -absMedian * 2, max: absMedian * 5, step: absMedian / 100 };
+    }
+    if (absMedian > 10) {
+      return { min: -absMedian * 2, max: absMedian * 5, step: 0.1 };
+    }
+    if (absMedian > 1) {
+      return { min: -5, max: absMedian * 5, step: 0.01 };
+    }
+    return { min: -2, max: 5, step: 0.001 };
   };
 
   // Group features into chunks of 10
@@ -94,7 +165,7 @@ export default function PredictPage() {
           <ScanLine size={32} style={{ color: 'var(--blue)' }} />
           Single Prediction
         </h1>
-        <p>Enter financial features to predict loan default risk</p>
+        <p>Enter financial features to predict loan default risk ({featureNames.length} SFFS-selected features)</p>
       </motion.div>
 
       {/* Controls */}
@@ -102,6 +173,9 @@ export default function PredictPage() {
         variants={itemVariants}
         style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center' }}
       >
+        <button className="btn btn-secondary" onClick={handleLoadMedians} title="Fill all features with training median values">
+          📊 Load Medians
+        </button>
         <button className="btn btn-secondary" onClick={handleRandomFill}>
           🎲 Random Fill
         </button>
@@ -129,11 +203,12 @@ export default function PredictPage() {
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 width: '100%', padding: 'var(--space-4) var(--space-6)',
                 background: 'none', border: 'none', color: 'var(--text-primary)',
+                textAlign: 'left',
                 cursor: 'pointer', fontFamily: 'var(--font-family)', fontSize: 'var(--font-size-sm)',
                 fontWeight: 600,
               }}
             >
-              <span>Features {group[0]} — {group[group.length - 1]}</span>
+              <span>{getFeatureInfo(group[0]).label} — {getFeatureInfo(group[group.length - 1]).label}</span>
               {expandedGroups[gIdx] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
 
@@ -147,30 +222,64 @@ export default function PredictPage() {
                   style={{ overflow: 'hidden' }}
                 >
                   <div className="feature-grid" style={{ padding: '0 var(--space-6) var(--space-5)' }}>
-                    {group.map((name) => (
-                      <div key={name} className="slider-container">
-                        <div className="slider-header">
-                          <label className="form-label" style={{ marginBottom: 0 }}>{name}</label>
-                          <span className="slider-value">{(features[name] || 0).toFixed(3)}</span>
+                    {group.map((name) => {
+                      const range = getSliderRange(name);
+                      const info = getFeatureInfo(name);
+                      const isCategorical = info.isCategorical;
+                      return (
+                        <div key={name} className="slider-container">
+                          <div className="slider-header">
+                            <label className="form-label" style={{ marginBottom: 0 }} title={info.description}>
+                              {info.label}
+                              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 400, marginLeft: 6 }}>({name})</span>
+                            </label>
+                            <span className="slider-value">{isCategorical ? Math.round(features[name] || 0) : (features[name] || 0).toFixed(3)}</span>
+                          </div>
+                          {info.description && (
+                            <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: 4, lineHeight: 1.3 }}>
+                              {info.description}
+                            </div>
+                          )}
+                          {isCategorical ? (
+                            /* Categorical input — integer number field instead of a slider */
+                            <input
+                              type="number"
+                              className="form-input"
+                              value={Math.round(features[name] || 0)}
+                              onChange={(e) => handleSliderChange(name, Math.round(parseFloat(e.target.value) || 0))}
+                              step={1}
+                              min={0}
+                              style={{ padding: '6px 10px', fontSize: 'var(--font-size-xs)' }}
+                            />
+                          ) : (
+                            /* Continuous input — slider + number field */
+                            <>
+                              <input
+                                type="range"
+                                min={range.min}
+                                max={range.max}
+                                step={range.step}
+                                value={features[name] || 0}
+                                onChange={(e) => handleSliderChange(name, e.target.value)}
+                              />
+                              <input
+                                type="number"
+                                className="form-input"
+                                value={features[name] || 0}
+                                onChange={(e) => handleSliderChange(name, e.target.value)}
+                                step={range.step}
+                                style={{ marginTop: 4, padding: '6px 10px', fontSize: 'var(--font-size-xs)' }}
+                              />
+                            </>
+                          )}
+                          {medians[name] !== undefined && (
+                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                              Median: {isCategorical ? Math.round(medians[name]) : medians[name].toFixed(4)}
+                            </div>
+                          )}
                         </div>
-                        <input
-                          type="range"
-                          min="-5"
-                          max="50"
-                          step="0.01"
-                          value={features[name] || 0}
-                          onChange={(e) => handleSliderChange(name, e.target.value)}
-                        />
-                        <input
-                          type="number"
-                          className="form-input"
-                          value={features[name] || 0}
-                          onChange={(e) => handleSliderChange(name, e.target.value)}
-                          step="0.01"
-                          style={{ marginTop: 4, padding: '6px 10px', fontSize: 'var(--font-size-xs)' }}
-                        />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </motion.div>
               )}

@@ -1,7 +1,7 @@
 /**
  * HistoryPage — Paginated prediction history with filters and detail view.
  */
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Clock,
@@ -145,9 +145,8 @@ export default function HistoryPage() {
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <>
+                  <React.Fragment key={item.id}>
                     <tr
-                      key={item.id}
                       className="clickable"
                       onClick={() => handleViewDetail(item.id)}
                       style={{ background: selectedId === item.id ? 'rgba(51,102,255,0.05)' : undefined }}
@@ -187,7 +186,7 @@ export default function HistoryPage() {
 
                     {/* Detail expansion */}
                     {selectedId === item.id && (
-                      <tr key={`detail-${item.id}`}>
+                      <tr>
                         <td colSpan={6} style={{ padding: 0 }}>
                           <AnimatePresence>
                             <motion.div
@@ -230,7 +229,7 @@ export default function HistoryPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

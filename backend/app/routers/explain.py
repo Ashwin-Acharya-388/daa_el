@@ -4,10 +4,8 @@ explain.py — Router for SHAP explanations.
 
 import logging
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.dependencies import rate_limiter, get_redis
+from app.dependencies import rate_limiter
 from app.schemas import ExplainRequest, ExplainResponse, ShapExplanation, ShapFactor
 from app.ml.explainer import compute_explanation
 
@@ -18,10 +16,9 @@ router = APIRouter(prefix="/api/explain", tags=["Explainability"])
 @router.post("", response_model=ExplainResponse, dependencies=[Depends(rate_limiter)])
 async def explain_prediction(
     body: ExplainRequest,
-    redis=Depends(get_redis),
 ):
     """Compute a SHAP explanation for a given set of features."""
-    shap_result = await compute_explanation(body.features, redis_client=redis)
+    shap_result = await compute_explanation(body.features)
 
     explanation = ShapExplanation(
         base_probability=shap_result["base_probability"],

@@ -62,6 +62,7 @@ import sys
 import time
 import json
 import copy
+import warnings
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -70,7 +71,8 @@ import matplotlib.pyplot as plt
 
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.exceptions import ConvergenceWarning
 
 import config
 
@@ -86,8 +88,15 @@ def evaluate_feature_set(X: np.ndarray, y: np.ndarray,
     """
     Evaluate a feature subset using stratified k-fold cross-validation.
 
-    Uses GradientBoosting (fast, handles imbalance well) as the evaluation
-    model.  Returns mean AUC-ROC score across folds.
+    Uses a shallow Multi-Layer Perceptron (MLP) as the proxy evaluator.
+    The MLP architecture (32 → 16 units, ReLU, Adam) mirrors the DenseNet
+    classifier head, ensuring that selected features align well with the
+    final deep neural network.  Returns mean AUC-ROC score across folds.
+
+    Includes numerical stability safeguards:
+      - L2 regularization (alpha) to prevent weight explosions
+      - Warning suppression for clean terminal output
+      - NaN / exception handling for divergent subsets
 
     Parameters
     ----------
@@ -99,25 +108,50 @@ def evaluate_feature_set(X: np.ndarray, y: np.ndarray,
 
     Returns
     -------
-    float — mean AUC-ROC score
+    float — mean AUC-ROC score (0.0 if evaluation fails or diverges)
     """
-    X_subset = X[:, feature_indices]
+    if not feature_indices:
+        return 0.0
 
-    scaler = StandardScaler()
-    X_subset = scaler.fit_transform(X_subset)
+    try:
+        X_subset = X[:, feature_indices]
 
-    clf = GradientBoostingClassifier(
-        n_estimators=50,
-        max_depth=3,
-        learning_rate=0.1,
-        subsample=0.8,
-        random_state=seed,
-    )
+        scaler = StandardScaler()
+        X_subset = scaler.fit_transform(X_subset)
 
-    cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
-    scores = cross_val_score(clf, X_subset, y, cv=cv, scoring="roc_auc", n_jobs=-1)
+        clf = MLPClassifier(
+            hidden_layer_sizes=(32, 16),
+            activation="relu",
+            solver="adam",
+            learning_rate="adaptive",
+            learning_rate_init=0.001,
+            alpha=0.0001,
+            max_iter=200,
+            early_stopping=True,
+            validation_fraction=0.15,
+            n_iter_no_change=10,
+            random_state=seed,
+        )
 
-    return scores.mean()
+        cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            warnings.filterwarnings("ignore", category=ConvergenceWarning)
+            old_np = np.seterr(all="ignore")
+            try:
+                scores = cross_val_score(
+                    clf, X_subset, y, cv=cv, scoring="roc_auc", n_jobs=-1
+                )
+            finally:
+                np.seterr(**old_np)
+
+        mean_score = float(np.nanmean(scores))
+        return mean_score if np.isfinite(mean_score) else 0.0
+
+    except Exception:
+        return 0.0
 
 
 # ════════════════════════════════════════════════════════════════════════

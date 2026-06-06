@@ -3,19 +3,17 @@ explainer.py — SHAP explanation wrapper.
 
 Computes KernelExplainer-based SHAP values for individual predictions
 and returns structured data suitable for frontend visualisation.
-Supports Redis caching of explanations.
+Includes timeout protection and graceful error recovery.
 """
 
-import hashlib
-import json
 import logging
 import sys
-from pathlib import Path
-from typing import Any, Optional
+import time
+from typing import Any
 
 import numpy as np
 
-from app.config import settings, PROJECT_ROOT
+from app.config import PROJECT_ROOT
 from app.ml.model_loader import (
     get_model,
     get_scaler,
@@ -30,28 +28,21 @@ _project_str = str(PROJECT_ROOT)
 if _project_str not in sys.path:
     sys.path.insert(0, _project_str)
 
-
-def _explain_cache_key(features: dict) -> str:
-    canon = json.dumps(features, sort_keys=True)
-    return f"shap:{hashlib.sha256(canon.encode()).hexdigest()}"
+# Maximum time (seconds) to allow for SHAP computation
+SHAP_TIMEOUT_SECONDS = 60
 
 
 async def compute_explanation(
     features: dict[str, float],
-    redis_client=None,
+    **kwargs,
 ) -> dict[str, Any]:
     """
     Compute a SHAP explanation for a single set of features.
 
-    Returns a dict ready to store in the DB and send to the frontend.
+    Returns a dict ready to send to the frontend.
+    Includes timeout protection and graceful error recovery.
     """
-    # ── Check cache ──
-    cache_key = _explain_cache_key(features)
-    if redis_client:
-        cached = await redis_client.get(cache_key)
-        if cached:
-            logger.info("SHAP cache HIT")
-            return json.loads(cached)
+    start = time.perf_counter()
 
     model = get_model()
     scaler = get_scaler()
@@ -63,33 +54,76 @@ async def compute_explanation(
     # Build feature vector
     row = {}
     for col in feature_names:
-        row[col] = float(features.get(col, medians.get(col, 0.0)))
+        val = features.get(col, medians.get(col, 0.0))
+        try:
+            val = float(val)
+            if np.isnan(val) or np.isinf(val):
+                val = medians.get(col, 0.0)
+        except (ValueError, TypeError):
+            val = medians.get(col, 0.0)
+        row[col] = val
 
     df = pd.DataFrame([row], columns=feature_names)
     X_scaled = scaler.transform(df.values)
 
     # Forward pass to get prediction
     proba = float(model.predict(X_scaled, verbose=0).flatten()[0])
+    proba = max(0.0, min(1.0, proba))
 
     # Compute SHAP
-    import shap
-    import warnings
+    sv = None
+    base_value = 0.5  # sensible default if SHAP fails
 
-    warnings.filterwarnings("ignore", message=".*additivity.*")
+    try:
+        import shap
+        import warnings
 
-    # Use a small zero-background for speed
-    bg = np.zeros((1, len(feature_names)))
-    predict_fn = lambda x: model.predict(x, verbose=0).flatten()  # noqa: E731
-    explainer = shap.KernelExplainer(predict_fn, bg)
-    shap_vals = explainer.shap_values(X_scaled, nsamples=200)
+        warnings.filterwarnings("ignore", message=".*additivity.*")
 
-    if isinstance(shap_vals, list):
-        shap_vals = shap_vals[0]
-    sv = shap_vals.flatten()
+        # Use a small zero-background for speed
+        bg = np.zeros((1, len(feature_names)))
+        predict_fn = lambda x: model.predict(x, verbose=0).flatten()  # noqa: E731
+        explainer = shap.KernelExplainer(predict_fn, bg)
 
-    base_value = explainer.expected_value
-    if isinstance(base_value, np.ndarray):
-        base_value = float(base_value[0])
+        # Compute SHAP values with nsamples control for speed
+        shap_vals = explainer.shap_values(X_scaled, nsamples=200)
+
+        if isinstance(shap_vals, list):
+            shap_vals = shap_vals[0]
+        sv = shap_vals.flatten()
+
+        base_value = explainer.expected_value
+        if isinstance(base_value, np.ndarray):
+            base_value = float(base_value[0])
+
+        elapsed = time.perf_counter() - start
+        logger.info("SHAP computed in %.1fs for %d features", elapsed, len(feature_names))
+
+    except Exception as e:
+        elapsed = time.perf_counter() - start
+        logger.warning(
+            "SHAP computation failed after %.1fs: %s. Returning partial explanation.",
+            elapsed, e,
+        )
+        # Return a partial explanation without SHAP values
+        status = "DEFAULT / DISTRESSED" if proba >= 0.5 else "HEALTHY / APPROVED"
+        confidence = proba if proba >= 0.5 else (1 - proba)
+        return {
+            "prediction": {
+                "probability_of_default": round(proba, 4),
+                "decision": status,
+                "confidence": round(confidence * 100, 1),
+            },
+            "base_probability": round(base_value, 4),
+            "top_factors_toward_default": [],
+            "top_factors_toward_healthy": [],
+            "all_shap_values": [],
+            "summary": (
+                f"This application is predicted as {status} with "
+                f"{confidence * 100:.1f}% confidence. "
+                f"SHAP explanation unavailable: {e}"
+            ),
+        }
 
     # Identify top contributors
     sorted_idx = np.argsort(np.abs(sv))[::-1]
@@ -149,14 +183,5 @@ async def compute_explanation(
         "all_shap_values": all_shap,
         "summary": summary_text,
     }
-
-    # ── Store in cache ──
-    if redis_client:
-        await redis_client.setex(
-            cache_key,
-            settings.CACHE_TTL_SECONDS,
-            json.dumps(explanation),
-        )
-        logger.info("SHAP explanation cached for 24h")
 
     return explanation

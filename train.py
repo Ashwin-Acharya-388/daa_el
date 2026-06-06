@@ -102,6 +102,49 @@ def main():
         scaler_path = os.path.join(config.MODEL_DIR, "scaler.joblib")
         joblib.dump(scaler, scaler_path)
 
+        # Save metadata with the ACTUAL feature names used for training
+        training_medians = {}
+        for col in feature_names:
+            training_medians[col] = float(
+                X_train_raw[col].median() if hasattr(X_train_raw, 'columns')
+                else 0.0
+            )
+
+        metadata = {
+            "feature_names": feature_names,
+            "training_medians": training_medians,
+            "target_column": config.TARGET_COLUMN,
+            "binarize_threshold": config.BINARIZE_THRESHOLD,
+            "columns_dropped": config.COLUMNS_TO_DROP,
+            "dataset": {
+                "source": "Consolidated (Financial Distress + Taiwanese Bankruptcy)"
+                         if (args.consolidated or config.USE_CONSOLIDATED) else "Financial Distress",
+                "total_rows": len(X_all) if 'X_all' in dir() else X_train.shape[0] + X_test.shape[0],
+                "train_rows": X_train.shape[0],
+                "test_rows": X_test.shape[0],
+            },
+        }
+
+        # Add feature selection info if applicable
+        if args.use_selected_features:
+            sffs_path = os.path.join(config.REPORTS_DIR, "sffs_selection_results.json")
+            greedy_path = config.SELECTED_FEATURES_PATH
+            if os.path.exists(sffs_path):
+                with open(sffs_path, "r") as f:
+                    sffs_data = json.load(f)
+                metadata["feature_selection"] = {
+                    "algorithm": sffs_data.get("algorithm", "SFFS"),
+                    "n_features_selected": len(feature_names),
+                    "final_auc": sffs_data.get("final_auc", 0),
+                    "total_evaluations": sffs_data.get("total_evaluations", 0),
+                    "total_exclusions": sffs_data.get("total_exclusions", 0),
+                }
+
+        metadata_path = os.path.join(config.MODEL_DIR, "metadata.json")
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+        print(f"  Metadata saved to {metadata_path}")
+
         print(f"  Train: {X_train.shape[0]} samples × {X_train.shape[1]} features")
         print(f"  Test:  {X_test.shape[0]} samples × {X_test.shape[1]} features")
 
