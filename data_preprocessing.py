@@ -46,6 +46,14 @@ def load_dataset(path: str = None) -> pd.DataFrame:
     else:
         raise ValueError(f"Unsupported file format: {ext}. Use .csv or .xlsx")
 
+    # Rename Taiwanese Bankruptcy columns if applicable
+    if "Bankrupt?" in df.columns:
+        feature_cols = [col for col in df.columns if col != 'Bankrupt?']
+        mapping = {col: f'tw_f{i+1}' for i, col in enumerate(feature_cols)}
+        df.rename(columns=mapping, inplace=True)
+        df.rename(columns={'Bankrupt?': 'target'}, inplace=True)
+        print("[Preprocessing] Renamed Taiwanese Bankruptcy columns to tw_f1, tw_f2, ..., target")
+
     print(f"[Preprocessing] Loaded dataset: {path}")
     print(f"  Shape: {df.shape[0]} rows × {df.shape[1]} columns")
     return df
@@ -222,7 +230,7 @@ def scale_and_split(X: pd.DataFrame,
     }
 
 
-def run_preprocessing(data_path: str = None) -> dict:
+def run_preprocessing(data_path: str = None, use_selected_features: bool = False) -> dict:
     """
     Full preprocessing pipeline: load → clean → scale → split.
 
@@ -232,6 +240,18 @@ def run_preprocessing(data_path: str = None) -> dict:
     """
     df = load_dataset(data_path)
     X, y = clean_and_prepare(df)
+    
+    if use_selected_features:
+        if os.path.exists(config.SELECTED_FEATURES_PATH):
+            with open(config.SELECTED_FEATURES_PATH, "r") as f:
+                sel = json.load(f)
+            selected_features = sel["selected_features"]
+            existing_selected = [col for col in selected_features if col in X.columns]
+            print(f"[Preprocessing] Filtering features. Keeping {len(existing_selected)} of {len(selected_features)} SFFS-selected features.")
+            X = X[existing_selected]
+        else:
+            print(f"[WARNING] Selected features file not found at {config.SELECTED_FEATURES_PATH}. Training with all features.")
+
     result = scale_and_split(X, y)
     return result
 

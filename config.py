@@ -9,7 +9,7 @@ import os
 
 # ─────────────────────────────── Paths ───────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH = os.path.join(BASE_DIR, "Financial Distress.csv")
+DATA_PATH = os.path.join(BASE_DIR, "taiwanese_bankruptcy.csv")
 TAIWANESE_DATA_PATH = os.path.join(BASE_DIR, "taiwanese_bankruptcy.csv")
 CONSOLIDATED_DATA_PATH = os.path.join(BASE_DIR, "consolidated_dataset.csv")
 OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
@@ -22,9 +22,9 @@ for d in [OUTPUT_DIR, MODEL_DIR, PLOTS_DIR, REPORTS_DIR]:
     os.makedirs(d, exist_ok=True)
 
 # ─────────────────────────── Dataset Settings ────────────────────────
-TARGET_COLUMN = "Financial Distress"       # Name of the target column in CSV
+TARGET_COLUMN = "target"                   # Name of the target column in CSV
 COLUMNS_TO_DROP = ["Company", "Time"]      # Non-feature columns to drop
-BINARIZE_TARGET = True                     # Whether to convert target to 0/1
+BINARIZE_TARGET = False                    # Whether to convert target to 0/1
 BINARIZE_THRESHOLD = -0.50                 # Values < threshold → 1 (distressed)
 TEST_SIZE = 0.20                           # Fraction of data for test set
 RANDOM_SEED = 42                           # Global random seed for reproducibility
@@ -63,4 +63,4 @@ GREEDY_MIN_FEATURES = 25          # Minimum features to select (forced)
 GREEDY_MIN_IMPROVEMENT = 0.001    # Minimum AUC improvement (ε) to continue
 GREEDY_CV_FOLDS = 5               # Cross-validation folds for evaluation
 SELECTED_FEATURES_PATH = os.path.join(REPORTS_DIR, "selected_features.json")
-USE_CONSOLIDATED = True           # Whether to use consolidated dataset
+USE_CONSOLIDATED = False           # Whether to use consolidated dataset

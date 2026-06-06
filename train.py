@@ -150,7 +150,7 @@ def main():
 
     else:
         from data_preprocessing import run_preprocessing
-        data = run_preprocessing(args.data)
+        data = run_preprocessing(args.data, use_selected_features=args.use_selected_features)
 
         X_train = data["X_train"]
         X_test = data["X_test"]
