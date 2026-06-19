@@ -59,4 +59,5 @@ async def model_info():
             "total_evaluations": fs_info.get("total_evaluations", 0),
         },
         training_medians=metadata.get("training_medians", {}),
+        training_stds=metadata.get("training_stds", {}),
     )

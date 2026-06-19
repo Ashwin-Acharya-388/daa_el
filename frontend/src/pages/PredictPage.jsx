@@ -61,6 +61,7 @@ const itemVariants = {
 export default function PredictPage() {
   const [featureNames, setFeatureNames] = useState([]);
   const [medians, setMedians] = useState({});
+  const [trainingStds, setTrainingStds] = useState({});
   const [features, setFeatures] = useState({});
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -74,11 +75,13 @@ export default function PredictPage() {
       .then((res) => {
         const names = res.data.feature_names || [];
         const meds = res.data.training_medians || {};
+        const stds = res.data.training_stds || {};
         setFeatureNames(names);
         setMedians(meds);
-        // Initialize features with zeros
+        setTrainingStds(stds);
+        // Initialize features with training medians (realistic starting point)
         const init = {};
-        names.forEach((n) => (init[n] = 0));
+        names.forEach((n) => (init[n] = meds[n] !== undefined ? meds[n] : 0));
         setFeatures(init);
       })
       .catch((err) => {
@@ -92,7 +95,7 @@ export default function PredictPage() {
 
   const handleReset = () => {
     const init = {};
-    featureNames.forEach((n) => (init[n] = 0));
+    featureNames.forEach((n) => (init[n] = medians[n] !== undefined ? medians[n] : 0));
     setFeatures(init);
     setResult(null);
     setError(null);
@@ -109,10 +112,11 @@ export default function PredictPage() {
   const handleRandomFill = () => {
     const rand = {};
     featureNames.forEach((n) => {
-      // Use median as center, add random variation
+      // Generate random values within ±1.5 standard deviations of the median
+      // This keeps values within the training distribution
       const median = medians[n] || 0;
-      const spread = Math.max(Math.abs(median) * 2, 1);
-      rand[n] = parseFloat((median + (Math.random() - 0.5) * spread).toFixed(4));
+      const std = trainingStds[n] || Math.abs(median) * 0.05 || 0.01;
+      rand[n] = parseFloat((median + (Math.random() - 0.5) * 2 * 1.5 * std).toFixed(6));
     });
     setFeatures(rand);
   };

@@ -19,20 +19,6 @@ const api = axios.create({
 export const predictSingle = (features, includeShap = true) =>
   api.post('/api/predict', { features, include_shap: includeShap });
 
-export const uploadBatch = (file) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  return api.post('/api/predict/batch', formData, {
-    headers: { 'Content-Type': 'multipart/form-data', 'X-API-Key': API_KEY },
-  });
-};
-
-export const getBatchStatus = (taskId) =>
-  api.get(`/api/predict/batch/${taskId}`);
-
-export const downloadBatchResult = (taskId) =>
-  api.get(`/api/predict/batch/${taskId}/download`, { responseType: 'blob' });
-
 // ── Explain ──
 export const explainPrediction = (features) =>
   api.post('/api/explain', { features });

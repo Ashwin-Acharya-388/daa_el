@@ -67,13 +67,12 @@ app.add_middleware(
 )
 
 # ── Mount routers ──
-from app.routers import predict, explain, model_info, history, websocket  # noqa: E402
+from app.routers import predict, explain, model_info, history  # noqa: E402
 
 app.include_router(predict.router)
 app.include_router(explain.router)
 app.include_router(model_info.router)
 app.include_router(history.router)
-app.include_router(websocket.router)
 
 
 # ── Root health check ──

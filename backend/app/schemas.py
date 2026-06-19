@@ -92,6 +92,7 @@ class ModelInfoResponse(BaseModel):
     architecture: dict[str, Any]
     feature_selection: dict[str, Any] = {}
     training_medians: dict[str, float] = {}
+    training_stds: dict[str, float] = {}
 
 
 # ────────────────── Explain ─────────────────────────────────────────

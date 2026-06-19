@@ -5,7 +5,6 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   ScanLine,
-  FileSpreadsheet,
   Clock,
   BarChart3,
   Sun,
@@ -16,7 +15,6 @@ import {
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/predict', label: 'Single Prediction', icon: ScanLine },
-  { to: '/batch', label: 'Batch Prediction', icon: FileSpreadsheet },
   { to: '/history', label: 'Prediction History', icon: Clock },
   { to: '/insights', label: 'Model Insights', icon: BarChart3 },
 ];
