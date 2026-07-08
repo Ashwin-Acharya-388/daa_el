@@ -133,27 +133,18 @@ export default function PredictPage() {
     }
   };
 
-  // Compute dynamic slider range for each feature based on its observed training min and max
+  // Compute dynamic slider range: ±1.5 standard deviations around the median
   const getSliderRange = (name) => {
     const median = medians[name] || 0;
-    
-    // Use training mins/maxs, fallback to ±3 standard deviations (or ±10% relative fallback)
+    // Get standard deviation from training stats, fallback to 5% of median or 0.01
     const std = trainingStds[name] || Math.abs(median) * 0.05 || 0.01;
-    const fallbackMin = median - 3 * std;
-    const fallbackMax = median + 3 * std;
-    
-    let minVal = trainingMins[name] !== undefined ? trainingMins[name] : fallbackMin;
-    let maxVal = trainingMaxs[name] !== undefined ? trainingMaxs[name] : fallbackMax;
 
-    // Safety check: ensure min <= max
-    if (minVal > maxVal) {
-      const temp = minVal;
-      minVal = maxVal;
-      maxVal = temp;
-    }
-    
+    // Set bounds strictly to ±1.5 standard deviations from the median
+    const minVal = median - 1.5 * std;
+    const maxVal = median + 1.5 * std;
+
     const range = maxVal - minVal;
-    
+
     // Choose sensible steps based on range order of magnitude
     let step = 0.001;
     if (range > 1000) step = 10.0;
