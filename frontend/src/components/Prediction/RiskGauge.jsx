@@ -110,20 +110,6 @@ export default function RiskGauge({ value = 0, size = 200 }) {
           );
         })}
 
-        {/* Center value — positioned below the arc */}
-        <text
-          x={cx}
-          y={textY}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill={color}
-          fontSize="34"
-          fontWeight="800"
-          fontFamily="Inter, sans-serif"
-          style={{ transition: 'fill 0.5s ease' }}
-        >
-          {animatedValue.toFixed(1)}%
-        </text>
       </svg>
     </div>
   );
