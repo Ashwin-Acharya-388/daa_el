@@ -60,4 +60,6 @@ async def model_info():
         },
         training_medians=metadata.get("training_medians", {}),
         training_stds=metadata.get("training_stds", {}),
+        training_mins=metadata.get("training_mins", {}),
+        training_maxs=metadata.get("training_maxs", {}),
     )

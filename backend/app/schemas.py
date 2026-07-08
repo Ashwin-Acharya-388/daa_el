@@ -93,6 +93,8 @@ class ModelInfoResponse(BaseModel):
     feature_selection: dict[str, Any] = {}
     training_medians: dict[str, float] = {}
     training_stds: dict[str, float] = {}
+    training_mins: dict[str, float] = {}
+    training_maxs: dict[str, float] = {}
 
 
 # ────────────────── Explain ─────────────────────────────────────────

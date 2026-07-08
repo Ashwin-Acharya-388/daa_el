@@ -62,6 +62,8 @@ export default function PredictPage() {
   const [featureNames, setFeatureNames] = useState([]);
   const [medians, setMedians] = useState({});
   const [trainingStds, setTrainingStds] = useState({});
+  const [trainingMins, setTrainingMins] = useState({});
+  const [trainingMaxs, setTrainingMaxs] = useState({});
   const [features, setFeatures] = useState({});
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -76,9 +78,13 @@ export default function PredictPage() {
         const names = res.data.feature_names || [];
         const meds = res.data.training_medians || {};
         const stds = res.data.training_stds || {};
+        const mins = res.data.training_mins || {};
+        const maxs = res.data.training_maxs || {};
         setFeatureNames(names);
         setMedians(meds);
         setTrainingStds(stds);
+        setTrainingMins(mins);
+        setTrainingMaxs(maxs);
         // Initialize features with training medians (realistic starting point)
         const init = {};
         names.forEach((n) => (init[n] = meds[n] !== undefined ? meds[n] : 0));
@@ -127,20 +133,37 @@ export default function PredictPage() {
     }
   };
 
-  // Compute dynamic slider range for each feature based on its median
+  // Compute dynamic slider range for each feature based on its observed training min and max
   const getSliderRange = (name) => {
     const median = medians[name] || 0;
-    const absMedian = Math.abs(median);
-    if (absMedian > 100) {
-      return { min: -absMedian * 2, max: absMedian * 5, step: absMedian / 100 };
+    
+    // Use training mins/maxs, fallback to ±3 standard deviations (or ±10% relative fallback)
+    const std = trainingStds[name] || Math.abs(median) * 0.05 || 0.01;
+    const fallbackMin = median - 3 * std;
+    const fallbackMax = median + 3 * std;
+    
+    let minVal = trainingMins[name] !== undefined ? trainingMins[name] : fallbackMin;
+    let maxVal = trainingMaxs[name] !== undefined ? trainingMaxs[name] : fallbackMax;
+
+    // Safety check: ensure min <= max
+    if (minVal > maxVal) {
+      const temp = minVal;
+      minVal = maxVal;
+      maxVal = temp;
     }
-    if (absMedian > 10) {
-      return { min: -absMedian * 2, max: absMedian * 5, step: 0.1 };
-    }
-    if (absMedian > 1) {
-      return { min: -5, max: absMedian * 5, step: 0.01 };
-    }
-    return { min: -2, max: 5, step: 0.001 };
+    
+    const range = maxVal - minVal;
+    
+    // Choose sensible steps based on range order of magnitude
+    let step = 0.001;
+    if (range > 1000) step = 10.0;
+    else if (range > 100) step = 1.0;
+    else if (range > 10) step = 0.1;
+    else if (range > 1) step = 0.01;
+    else if (range > 0.1) step = 0.001;
+    else step = 0.00001;
+
+    return { min: minVal, max: maxVal, step: step };
   };
 
   // Group features into chunks of 10

@@ -104,15 +104,22 @@ def main():
 
         # Save metadata with the ACTUAL feature names used for training
         training_medians = {}
+        training_stds = {}
+        training_mins = {}
+        training_maxs = {}
         for col in feature_names:
-            training_medians[col] = float(
-                X_train_raw[col].median() if hasattr(X_train_raw, 'columns')
-                else 0.0
-            )
+            has_cols = hasattr(X_train_raw, 'columns')
+            training_medians[col] = float(X_train_raw[col].median() if has_cols else 0.0)
+            training_stds[col] = float(X_train_raw[col].std() if has_cols else 0.01)
+            training_mins[col] = float(X_train_raw[col].min() if has_cols else 0.0)
+            training_maxs[col] = float(X_train_raw[col].max() if has_cols else 1.0)
 
         metadata = {
             "feature_names": feature_names,
             "training_medians": training_medians,
+            "training_stds": training_stds,
+            "training_mins": training_mins,
+            "training_maxs": training_maxs,
             "target_column": config.TARGET_COLUMN,
             "binarize_threshold": config.BINARIZE_THRESHOLD,
             "columns_dropped": config.COLUMNS_TO_DROP,

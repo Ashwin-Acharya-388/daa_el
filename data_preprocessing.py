@@ -197,10 +197,13 @@ def scale_and_split(X: pd.DataFrame,
     scaler_path = os.path.join(config.MODEL_DIR, "scaler.joblib")
     joblib.dump(scaler, scaler_path)
 
-    # Save feature names and training medians (for missing value handling at inference)
+    # Save feature names and training medians, stds, mins, maxs
     metadata = {
         "feature_names": feature_names,
         "training_medians": X_train.median().to_dict(),
+        "training_stds": X_train.std().to_dict(),
+        "training_mins": X_train.min().to_dict(),
+        "training_maxs": X_train.max().to_dict(),
         "target_column": config.TARGET_COLUMN,
         "binarize_threshold": config.BINARIZE_THRESHOLD,
         "columns_dropped": config.COLUMNS_TO_DROP
@@ -210,7 +213,7 @@ def scale_and_split(X: pd.DataFrame,
     serializable = {}
     for k, v in metadata.items():
         if isinstance(v, dict):
-            serializable[k] = {kk: float(vv) if isinstance(vv, (np.floating, float)) else vv
+            serializable[k] = {kk: float(vv) if isinstance(vv, (np.floating, np.integer, float, int)) else vv
                                for kk, vv in v.items()}
         else:
             serializable[k] = v
