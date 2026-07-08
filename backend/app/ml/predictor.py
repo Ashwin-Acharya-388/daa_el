@@ -117,3 +117,50 @@ async def predict_single(
         logger.exception("Prediction failed after %.1fms: %s", elapsed_ms, e)
         raise RuntimeError(f"Model prediction failed: {e}") from e
 
+
+def predict_batch_sync(df: pd.DataFrame, progress_callback=None) -> pd.DataFrame:
+    """
+    Synchronously run predictions on a DataFrame in chunks, updating progress.
+    """
+    model = get_model()
+    scaler = get_scaler()
+    feature_names = get_feature_names()
+    medians = get_training_medians()
+
+    total = len(df)
+    chunk_size = 32
+
+    # Prepare features
+    X = pd.DataFrame()
+    for col in feature_names:
+        if col in df.columns:
+            X[col] = df[col].astype(float)
+        else:
+            X[col] = medians.get(col, 0.0)
+
+    # Impute remaining NaN with medians
+    for col in X.columns:
+        if X[col].isnull().any():
+            X[col].fillna(medians.get(col, 0.0), inplace=True)
+
+    # Predict in chunks
+    probas = []
+    for i in range(0, total, chunk_size):
+        X_chunk = X.iloc[i:i+chunk_size]
+        X_scaled = scaler.transform(X_chunk.values)
+        chunk_probas = model.predict(X_scaled, verbose=0).flatten()
+        probas.extend(chunk_probas)
+        if progress_callback:
+            progress_callback(min(i + chunk_size, total), total)
+
+    df_out = df.copy()
+    df_out["default_probability"] = [round(float(p), 4) for p in probas]
+    df_out["predicted_class"] = [1 if p >= 0.5 else 0 for p in probas]
+    df_out["decision"] = [
+        "DEFAULT / HIGH RISK" if p >= 0.5 else "APPROVED / LOW RISK"
+        for p in probas
+    ]
+
+    return df_out
+
+

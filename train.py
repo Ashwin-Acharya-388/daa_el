@@ -16,6 +16,7 @@ Usage:
     python train.py --data my.csv  # Use custom dataset
 """
 
+import json
 import os
 import sys
 import time
@@ -68,7 +69,6 @@ def main():
         from data_consolidation import consolidate_datasets
         from sklearn.model_selection import train_test_split
         from sklearn.preprocessing import StandardScaler
-        import json
 
         consolidated = consolidate_datasets()
         X_all = consolidated["X"]
@@ -157,6 +157,7 @@ def main():
         y_train = data["y_train"]
         y_test = data["y_test"]
         feature_names = data["feature_names"]
+        scaler = data["scaler"]
 
     # ════════════════════════════════════════════════════════════════════
     #  STEP 2: Data Balancing (SMOTE-ENN)
@@ -167,6 +168,29 @@ def main():
 
     from data_balancing import apply_smote_enn
     X_train_bal, y_train_bal = apply_smote_enn(X_train, y_train)
+
+    # ── Compute balanced means for smoother inference imputation ──
+    # The raw training medians are heavily biased toward healthy companies
+    # (since defaults represent <5% of the dataset). By using the mean of
+    # the SMOTE-ENN balanced dataset instead, missing features at inference
+    # time default to a neutral value rather than an "extremely healthy"
+    # value, producing smoother, better-calibrated risk probabilities.
+    print(f"\n[Balanced Means] Computing balanced dataset means for inference imputation...")
+    X_train_bal_raw = scaler.inverse_transform(X_train_bal)
+    balanced_means = X_train_bal_raw.mean(axis=0)
+    balanced_means_dict = {
+        feature_names[i]: float(balanced_means[i])
+        for i in range(len(feature_names))
+    }
+
+    # Update metadata.json — overwrite 'training_medians' with balanced means
+    meta_path = os.path.join(config.MODEL_DIR, "metadata.json")
+    with open(meta_path, "r") as f:
+        metadata_on_disk = json.load(f)
+    metadata_on_disk["training_medians"] = balanced_means_dict
+    with open(meta_path, "w") as f:
+        json.dump(metadata_on_disk, f, indent=2)
+    print(f"  Updated {meta_path} with balanced dataset means ({len(balanced_means_dict)} features)")
 
     # ════════════════════════════════════════════════════════════════════
     #  STEP 3: Build DenseNet Model
