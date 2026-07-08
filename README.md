@@ -198,7 +198,7 @@ cd backend
 pip install -r requirements.txt
 
 # Run the FastAPI server in hot-reload development mode
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 * The API will be available at `http://127.0.0.1:8000`
 * Interactive OpenAPI Swagger UI docs are auto-generated at `http://127.0.0.1:8000/docs`
