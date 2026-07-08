@@ -12,19 +12,19 @@ export default function RiskGauge({ value = 0, size = 200 }) {
   }, [value]);
 
   const width = size;
-  const height = size * 0.65;
+  const height = size * 0.75;
   const cx = width / 2;
-  const cy = height - 10;
-  const radius = Math.min(cx, cy) - 15;
+  const arcCy = height * 0.45;       // center of the arc (upper portion)
+  const radius = Math.min(cx, arcCy) - 8;
   const startAngle = Math.PI;
   const endAngle = 0;
   const angleRange = startAngle - endAngle;
   const currentAngle = startAngle - (animatedValue / 100) * angleRange;
 
   // Background arc
-  const bgArc = describeArc(cx, cy, radius, endAngle, startAngle);
+  const bgArc = describeArc(cx, arcCy, radius, endAngle, startAngle);
   // Value arc
-  const valueArc = describeArc(cx, cy, radius, currentAngle, startAngle);
+  const valueArc = describeArc(cx, arcCy, radius, currentAngle, startAngle);
 
   // Gradient color based on value
   const getColor = (v) => {
@@ -34,6 +34,10 @@ export default function RiskGauge({ value = 0, size = 200 }) {
   };
 
   const color = getColor(animatedValue);
+
+  // Text sits below the arc, centered in the lower portion
+  const textY = arcCy + 20;
+  const labelY = textY + 26;
 
   return (
     <div className="gauge-container">
@@ -79,12 +83,12 @@ export default function RiskGauge({ value = 0, size = 200 }) {
         {/* Tick marks */}
         {[0, 25, 50, 75, 100].map((tick) => {
           const angle = startAngle - (tick / 100) * angleRange;
-          const x1 = cx + (radius - 20) * Math.cos(angle);
-          const y1 = cy - (radius - 20) * Math.sin(angle);
-          const x2 = cx + (radius - 28) * Math.cos(angle);
-          const y2 = cy - (radius - 28) * Math.sin(angle);
-          const lx = cx + (radius - 38) * Math.cos(angle);
-          const ly = cy - (radius - 38) * Math.sin(angle);
+          const x1 = cx + (radius + 6) * Math.cos(angle);
+          const y1 = arcCy - (radius + 6) * Math.sin(angle);
+          const x2 = cx + (radius + 14) * Math.cos(angle);
+          const y2 = arcCy - (radius + 14) * Math.sin(angle);
+          const lx = cx + (radius + 24) * Math.cos(angle);
+          const ly = arcCy - (radius + 24) * Math.sin(angle);
           return (
             <g key={tick}>
               <line
@@ -106,30 +110,19 @@ export default function RiskGauge({ value = 0, size = 200 }) {
           );
         })}
 
-        {/* Center value */}
+        {/* Center value — positioned below the arc */}
         <text
           x={cx}
-          y={cy - 20}
+          y={textY}
           textAnchor="middle"
           dominantBaseline="middle"
           fill={color}
-          fontSize="32"
+          fontSize="34"
           fontWeight="800"
           fontFamily="Inter, sans-serif"
           style={{ transition: 'fill 0.5s ease' }}
         >
           {animatedValue.toFixed(1)}%
-        </text>
-        <text
-          x={cx}
-          y={cy + 2}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="rgba(255,255,255,0.4)"
-          fontSize="11"
-          fontFamily="Inter, sans-serif"
-        >
-          Risk Score
         </text>
       </svg>
     </div>

@@ -101,14 +101,6 @@ export default function PredictPage() {
     setError(null);
   };
 
-  const handleLoadMedians = () => {
-    const filled = {};
-    featureNames.forEach((n) => {
-      filled[n] = medians[n] !== undefined ? medians[n] : 0;
-    });
-    setFeatures(filled);
-  };
-
   const handleRandomFill = () => {
     const rand = {};
     featureNames.forEach((n) => {
@@ -177,9 +169,6 @@ export default function PredictPage() {
         variants={itemVariants}
         style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center' }}
       >
-        <button className="btn btn-secondary" onClick={handleLoadMedians} title="Fill all features with training median values">
-          📊 Load Medians
-        </button>
         <button className="btn btn-secondary" onClick={handleRandomFill}>
           🎲 Random Fill
         </button>

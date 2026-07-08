@@ -7,11 +7,12 @@ error handling, and performance logging.
 
 import logging
 import time
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
 
+from app.config import settings
 from app.ml.model_loader import (
     get_model,
     get_scaler,
@@ -20,6 +21,26 @@ from app.ml.model_loader import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def calibrate_probability(proba: float, temperature: Optional[float] = None) -> float:
+    """
+    Apply post-hoc temperature scaling to soften sharp sigmoid outputs.
+
+    Reconstructs the pre-sigmoid logit from the probability, divides it
+    by the temperature T (> 1 to soften), and converts back to a
+    calibrated probability.
+    """
+    if temperature is None:
+        temperature = settings.TEMPERATURE
+    if temperature <= 0:
+        temperature = 1.0  # safety: avoid division by zero
+
+    # Clamp to avoid log(0) or log(negative)
+    p = max(1e-7, min(1 - 1e-7, proba))
+    logit = np.log(p / (1 - p))
+    calibrated_logit = logit / temperature
+    return float(1 / (1 + np.exp(-calibrated_logit)))
 
 
 def _build_feature_vector(
@@ -88,10 +109,13 @@ async def predict_single(
                 "Filled %d missing features with training medians", len(missing)
             )
 
-        proba = float(model.predict(X_scaled, verbose=0).flatten()[0])
+        raw_proba = float(model.predict(X_scaled, verbose=0).flatten()[0])
 
-        # Clamp probability to [0, 1] for safety
-        proba = max(0.0, min(1.0, proba))
+        # Clamp raw probability to [0, 1] for safety
+        raw_proba = max(0.0, min(1.0, raw_proba))
+
+        # Apply temperature scaling to soften sharp predictions
+        proba = calibrate_probability(raw_proba)
 
         pred_class = 1 if proba >= 0.5 else 0
         decision = "DEFAULT / HIGH RISK" if proba >= 0.5 else "APPROVED / LOW RISK"
@@ -153,12 +177,15 @@ def predict_batch_sync(df: pd.DataFrame, progress_callback=None) -> pd.DataFrame
         if progress_callback:
             progress_callback(min(i + chunk_size, total), total)
 
+    # Apply temperature scaling to soften sharp predictions
+    calibrated = [calibrate_probability(float(p)) for p in probas]
+
     df_out = df.copy()
-    df_out["default_probability"] = [round(float(p), 4) for p in probas]
-    df_out["predicted_class"] = [1 if p >= 0.5 else 0 for p in probas]
+    df_out["default_probability"] = [round(p, 4) for p in calibrated]
+    df_out["predicted_class"] = [1 if p >= 0.5 else 0 for p in calibrated]
     df_out["decision"] = [
         "DEFAULT / HIGH RISK" if p >= 0.5 else "APPROVED / LOW RISK"
-        for p in probas
+        for p in calibrated
     ]
 
     return df_out

@@ -1,16 +1,16 @@
 {
-  "accuracy": 0.871,
-  "precision": 0.1489,
-  "recall_sensitivity": 0.6364,
-  "specificity": 0.8788,
-  "f1_score": 0.2414,
-  "auc_roc": 0.8449,
-  "mcc": 0.264,
+  "accuracy": 0.8783,
+  "precision": 0.1789,
+  "recall_sensitivity": 0.7727,
+  "specificity": 0.8818,
+  "f1_score": 0.2906,
+  "auc_roc": 0.8839,
+  "mcc": 0.334,
   "confusion_matrix": {
-    "true_negatives": 1160,
-    "false_positives": 160,
-    "false_negatives": 16,
-    "true_positives": 28
+    "true_negatives": 1164,
+    "false_positives": 156,
+    "false_negatives": 10,
+    "true_positives": 34
   },
   "test_samples": 1364,
   "positive_samples": 44,

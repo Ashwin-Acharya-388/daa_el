@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     SHAP_EXPLANATIONS_PATH: str = str(REPORTS_DIR / "shap_explanations.json")
     SELECTED_FEATURES_PATH: str = str(REPORTS_DIR / "selected_features.json")
 
+    # ── Calibration ──
+    TEMPERATURE: float = 3.0  # Post-hoc temperature scaling (T > 1 softens predictions)
+
     # ── CORS ──
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",

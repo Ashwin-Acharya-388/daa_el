@@ -20,6 +20,7 @@ from app.ml.model_loader import (
     get_feature_names,
     get_training_medians,
 )
+from app.ml.predictor import calibrate_probability
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +68,11 @@ async def compute_explanation(
     X_scaled = scaler.transform(df.values)
 
     # Forward pass to get prediction
-    proba = float(model.predict(X_scaled, verbose=0).flatten()[0])
-    proba = max(0.0, min(1.0, proba))
+    raw_proba = float(model.predict(X_scaled, verbose=0).flatten()[0])
+    raw_proba = max(0.0, min(1.0, raw_proba))
+
+    # Apply temperature scaling to match predictor output
+    proba = calibrate_probability(raw_proba)
 
     # Compute SHAP
     sv = None

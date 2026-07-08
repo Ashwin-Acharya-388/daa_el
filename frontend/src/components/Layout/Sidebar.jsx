@@ -3,7 +3,6 @@
  */
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard,
   ScanLine,
   Clock,
   BarChart3,
@@ -13,8 +12,7 @@ import {
 } from 'lucide-react';
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/predict', label: 'Single Prediction', icon: ScanLine },
+  { to: '/', label: 'Single Prediction', icon: ScanLine },
   { to: '/history', label: 'Prediction History', icon: Clock },
   { to: '/insights', label: 'Model Insights', icon: BarChart3 },
 ];

@@ -2,19 +2,19 @@
 DenseNet Financial Risk Analysis — Classification Report
 ============================================================
 
-Accuracy:       0.8710
-Precision:      0.1489
-Recall:         0.6364
-Specificity:    0.8788
-F1-Score:       0.2414
-AUC-ROC:        0.8449
-MCC:            0.2640
+Accuracy:       0.8783
+Precision:      0.1789
+Recall:         0.7727
+Specificity:    0.8818
+F1-Score:       0.2906
+AUC-ROC:        0.8839
+MCC:            0.3340
 
                 precision    recall  f1-score   support
 
    Healthy (0)       0.99      0.88      0.93      1320
-Distressed (1)       0.15      0.64      0.24        44
+Distressed (1)       0.18      0.77      0.29        44
 
-      accuracy                           0.87      1364
-     macro avg       0.57      0.76      0.59      1364
-  weighted avg       0.96      0.87      0.91      1364
+      accuracy                           0.88      1364
+     macro avg       0.59      0.83      0.61      1364
+  weighted avg       0.97      0.88      0.91      1364
