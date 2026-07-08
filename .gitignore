@@ -2,7 +2,6 @@
 __pycache__/
 *.csv
 *.pdf
-outputs/
 .DS_Store
 *.ipynb_checkpoints/
 scratch/
